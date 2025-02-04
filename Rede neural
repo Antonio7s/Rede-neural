@@ -1,0 +1,87 @@
+import numpy as np
+import tensorflow as tf
+from sklearn.preprocessing import LabelEncoder
+from tensorflow.keras import Sequential
+from tensorflow.keras.layers import Dense, Dropout
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
+
+# Baixar recursos do nltk
+nltk.download('punkt')
+nltk.download('wordnet')
+
+# Inicializar o lemmatizer
+lemmatizer = WordNetLemmatizer()
+
+# Dados de treinamento - frases e intenções
+training_sentences = [
+    "Qual o tempo hoje?",
+    "Me ajude a fazer uma compra",
+    "Qual a previsão do tempo?",
+    "Eu quero comprar um celular",
+    "Como está o clima hoje?",
+    "Preciso de ajuda com meu pedido",
+]
+
+training_labels = [
+    "previsao_tempo",
+    "fazer_compra",
+    "previsao_tempo",
+    "fazer_compra",
+    "previsao_tempo",
+    "ajuda_compra",
+]
+
+# Tokenização das frases
+def preprocess_sentences(sentences):
+    words = []
+    for sentence in sentences:
+        word_list = word_tokenize(sentence)
+        words.extend(word_list)
+    return sorted(list(set(words)))
+
+words = preprocess_sentences(training_sentences)
+
+# Lemmatizar as palavras
+def lemmatize_words(sentence):
+    return [lemmatizer.lemmatize(w.lower()) for w in word_tokenize(sentence)]
+
+# Convertendo frases em números (bag of words)
+def convert_to_bow(sentence, words):
+    sentence_words = lemmatize_words(sentence)
+    bag = [1 if word in sentence_words else 0 for word in words]
+    return np.array(bag)
+
+X_train = np.array([convert_to_bow(sentence, words) for sentence in training_sentences])
+
+# Codificando as intenções
+label_encoder = LabelEncoder()
+y_train = label_encoder.fit_transform(training_labels)
+
+# Construção da rede neural
+model = Sequential([
+    Dense(128, input_dim=len(words), activation='relu'),
+    Dropout(0.5),
+    Dense(64, activation='relu'),
+    Dense(len(set(training_labels)), activation='softmax')
+])
+
+# Compilação do modelo
+model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+# Treinamento do modelo
+model.fit(X_train, y_train, epochs=200, batch_size=10, verbose=1)
+
+# Função para classificar novas frases
+def predict_intent(text):
+    bow = convert_to_bow(text, words)
+    prediction = model.predict(np.array([bow]))[0]
+    predicted_class = np.argmax(prediction)
+    intent = label_encoder.inverse_transform([predicted_class])
+    return intent[0]
+
+# Testando com uma nova frase
+test_sentence = "Preciso saber a previsão do tempo"
+predicted_intent = predict_intent(test_sentence)
+print(f"A intenção da frase é: {predicted_intent}")
